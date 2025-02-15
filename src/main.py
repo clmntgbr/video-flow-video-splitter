@@ -1,18 +1,20 @@
+from concurrent.futures import ThreadPoolExecutor
+from functools import partial
 import os
 import re
-import ffmpeg
+import assemblyai as aai
 
 from kombu import Queue
 from flask import Flask
 from celery import Celery
-from pydub import AudioSegment
+from datetime import timedelta
 
 from src.config import Config
 from src.s3_client import S3Client
 from src.rabbitmq_client import RabbitMQClient
 from src.file_client import FileClient
 from src.converter import ProtobufConverter
-from src.Protobuf.Message_pb2 import ApiToSoundExtractor
+from src.Protobuf.Message_pb2 import ApiToSubtitleGenerator
 
 app = Flask(__name__)
 app.config.from_object(Config)
@@ -39,79 +41,94 @@ celery.conf.update({
 
 @celery.task(name='tasks.process_message', queue=app.config['RMQ_QUEUE_READ'])
 def process_message(message):
-    apiToSoundExtractor: ApiToSoundExtractor = ProtobufConverter.json_to_protobuf(message)
+    apiToSubtitleGenerator: ApiToSubtitleGenerator = ProtobufConverter.json_to_protobuf(message)
+
+    chunks = []
 
     try:
-        key = f"{apiToSoundExtractor.mediaPod.userUuid}/{apiToSoundExtractor.mediaPod.uuid}/{apiToSoundExtractor.mediaPod.originalVideo.name}"
-        tmpFilePath = f"/tmp/{apiToSoundExtractor.mediaPod.originalVideo.name}"
-        uuid = os.path.splitext(os.path.basename(tmpFilePath))[0]
+        for audio in apiToSubtitleGenerator.mediaPod.originalVideo.audios:
+            chunks.append(audio)
 
-        if not s3_client.download_file(key, tmpFilePath):
-            return False
+        partialMultiprocess = partial(multiprocess, apiToSubtitleGenerator=apiToSubtitleGenerator)
 
-        audioFilePath = uuid + ".mp3"
-        tmpAudioFilePath = f"/tmp/{audioFilePath}"
-        
-        probe = ffmpeg.probe(tmpFilePath)
-        duration = float(probe['format']['duration'])
+        with ThreadPoolExecutor(max_workers=4) as executor:
+            results = list(executor.map(partialMultiprocess, chunks))
 
-        if not extract_sound(tmpFilePath, tmpAudioFilePath):
-            return False
+        resultsSorted = sorted(results, key=extract_chunk_number)
+        apiToSubtitleGenerator.mediaPod.originalVideo.subtitles.extend(resultsSorted)
+        apiToSubtitleGenerator.mediaPod.status = 'subtitle_generator_complete'
 
-        audioFilePath = convert_to_wav(tmpAudioFilePath)
-
-        chunks = chunk_wav(audioFilePath, uuid)
-
-        for chunk in chunks:
-            key = f"{apiToSoundExtractor.mediaPod.userUuid}/{apiToSoundExtractor.mediaPod.uuid}/audios/{chunk}"
-            if not s3_client.upload_file(f"/tmp/{chunk}", key):
-                return False
-            file_client.delete_file(f"/tmp/{chunk}")
-
-        file_client.delete_file(tmpAudioFilePath)
-        file_client.delete_file(tmpFilePath)
-
-        resultsSorted = sorted(chunks, key=extract_chunk_number)
-
-        apiToSoundExtractor.mediaPod.originalVideo.length = int(duration)
-        apiToSoundExtractor.mediaPod.originalVideo.audios.extend(resultsSorted)
-        apiToSoundExtractor.mediaPod.status = 'sound_extractor_complete'
-        
-        rmq_client.send_message(apiToSoundExtractor, "App\\Protobuf\\SoundExtractorToApi")
-
+        rmq_client.send_message(apiToSubtitleGenerator, "App\\Protobuf\\SubtitleGeneratorToApi")
         return True
     except Exception as e:
-        apiToSoundExtractor.mediaPod.status = 'sound_extractor_error'
-        if not rmq_client.send_message(apiToSoundExtractor, "App\\Protobuf\\SoundExtractorToApi"):
-            return False
+        apiToSubtitleGenerator.mediaPod.status = 'subtitle_generator_error'
+        rmq_client.send_message(apiToSubtitleGenerator, "App\\Protobuf\\SubtitleGenerator")
+        return False
 
-def extract_sound(file: str, audioFilePath: str) -> bool:
-    try:
-        ffmpeg.input(file).output(f"{audioFilePath}").run()
-        print(f"audio successfully extracted: {audioFilePath}")
-        return True
-    except Exception as e:
-        print(f"error extracting audio: {e}")
-    return False
+def multiprocess(chunk: str, apiToSubtitleGenerator: ApiToSubtitleGenerator):
+    key = f"{apiToSubtitleGenerator.mediaPod.userUuid}/{apiToSubtitleGenerator.mediaPod.uuid}/audios/{chunk}"
+    tmpFilePath = f"/tmp/{chunk}"
+    tmpSrtFilePath = os.path.splitext(tmpFilePath)[0] + ".srt"
+    
+    if not s3_client.download_file(key, tmpFilePath):
+            return False
+        
+    if not generate_subtitle_assemblyAI(tmpFilePath, tmpSrtFilePath):
+        return False
+    
+    key = f"{apiToSubtitleGenerator.mediaPod.userUuid}/{apiToSubtitleGenerator.mediaPod.uuid}/subtitles/{os.path.basename(tmpSrtFilePath)}"
+
+    if not s3_client.upload_file(tmpSrtFilePath, key):
+            return False
+    
+    return os.path.basename(tmpSrtFilePath)
 
 def extract_chunk_number(item):
-    match = re.search(r'_(\d+)\.wav$', item[0])
+    match = re.search(r'_(\d+)\.srt$', item[0])
     return int(match.group(1)) if match else float('inf')
 
-def convert_to_wav(audioFilePath) -> str:
-    audio = AudioSegment.from_mp3(audioFilePath)
-    wav_path = audioFilePath.replace(".mp3", ".wav")
-    audio.export(wav_path, format="wav", parameters=["-ac", "1", "-ar", "16000"]) 
-    return wav_path
+def ms_to_srt_time(ms):
+    td = timedelta(milliseconds=ms)
+    return f"{td.seconds // 3600:02}:{(td.seconds % 3600) // 60:02}:{td.seconds % 60:02},{td.microseconds // 1000:03}"
 
-def chunk_wav(audioFilePath: str, uuid: str) -> list[str]: 
-    audio = AudioSegment.from_mp3(audioFilePath)
-    segmentDuration = 5 * 60 * 1000
-    chunkFilenames = []
+def generate_subtitle_assemblyAI(tmpFilePath: str, tmpSrtFilePath: str) -> bool:
+    print("Uploading file for transcription...")
 
-    chunks = [audio[i:i+segmentDuration] for i in range(0, len(audio), segmentDuration)]
-    for idx, chunk in enumerate(chunks):
-        chunk.export(f"/tmp/{uuid}_{idx+1}.wav", format="wav")
-        chunkFilenames.append(f"{uuid}_{idx+1}.wav")
+    aai.settings.api_key = Config.ASSEMBLY_AI_API_KEY
+    config = aai.TranscriptionConfig(language_detection=True)
+    transcriber = aai.Transcriber(config=config)
 
-    return chunkFilenames
+    transcript = transcriber.transcribe(tmpFilePath)
+    words = transcript.words
+
+    srtContent = ""
+    subIndex = 1
+    currentLine = []
+    startTime = words[0].start
+
+    for i, word in enumerate(words):
+        currentLine.append(word.text)
+
+        if len(currentLine) >= 6 or i == len(words) - 1:
+            endTime = words[i].end
+
+            mid_index = len(currentLine) // 2
+            first_line = " ".join(currentLine[:mid_index])
+            second_line = " ".join(currentLine[mid_index:])
+
+            srtContent += f"{subIndex}\n"
+            srtContent += f"{ms_to_srt_time(startTime)} --> {ms_to_srt_time(endTime)}\n"
+            srtContent += f"{first_line}\n{second_line}\n\n"
+
+            subIndex += 1
+            currentLine = []
+            if i < len(words) - 1:
+                startTime = words[i + 1].start
+
+    print("File successfully transcribed")
+
+    with open(tmpSrtFilePath, "w", encoding="utf-8") as file:
+        file.write(srtContent)
+
+    print("SRT file successfully generated")
+    return True
