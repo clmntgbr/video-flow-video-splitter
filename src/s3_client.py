@@ -13,8 +13,18 @@ class S3Client:
 
     def upload_file(self, file_path, object_name):
         print(f"uploading s3 file {file_path}")
-        return self.client.upload_file(file_path, self.bucket_name, object_name)
+        try:
+            self.client.upload_file(file_path, self.bucket_name, object_name)
+            return True
+        except Exception as e:
+            print(f"error uploading s3 file {file_path} ({e})")
+        return False
 
-    def download_file(self, object_name, file_path):
+    def download_file(self, object_name, file_path) -> bool:
         print(f"downloading s3 file {file_path}")
-        return self.client.download_file(self.bucket_name, object_name, file_path)
+        try:
+            self.client.download_file(self.bucket_name, object_name, file_path)
+            return True
+        except Exception as e:
+            print(f"error downloading s3 file {file_path} ({e})")
+        return False
