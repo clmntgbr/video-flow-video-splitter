@@ -1,0 +1,64 @@
+syntax = "proto3";
+
+package App.Protobuf;
+
+option php_namespace = "App\\Protobuf";
+option php_metadata_namespace = "App\\Protobuf\\GPBMetadata";
+
+message ApiToSoundExtractor {
+    MediaPod mediaPod = 1;
+}
+
+message SoundExtractorToApi {
+    MediaPod mediaPod = 1;
+}
+
+message ApiToSubtitleGenerator {
+    MediaPod mediaPod = 1;
+}
+
+message SubtitleGeneratorToApi {
+    MediaPod mediaPod = 1;
+}
+
+message ApiToSubtitleMerger {
+    MediaPod mediaPod = 1;
+}
+
+message SubtitleMergerToApi {
+    MediaPod mediaPod = 1;
+}
+
+message ApiToSubtitleIncrustator {
+    MediaPod mediaPod = 1;
+}
+
+message SubtitleIncrustatorToApi {
+    MediaPod mediaPod = 1;
+}
+
+message MediaPod {
+    string uuid = 1;
+    string userUuid = 2;
+    Video originalVideo = 3;
+    Video video = 4;
+    string status = 5;
+}
+
+message Video {
+    string name = 1;
+    string mimeType = 2;
+    int64 size = 3;
+    int64 length = 4;
+    string subtitle = 5;
+    repeated string subtitles = 6;
+    repeated string audios = 7;
+    Preset preset = 8;
+}
+
+message Preset {
+    string subtitleFont = 1;
+    string subtitleSize = 2;
+    string subtitleColor = 3;
+    string videoFormat = 4;
+}
