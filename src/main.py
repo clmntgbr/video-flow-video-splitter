@@ -77,12 +77,12 @@ def process_message(message):
         apiToSoundExtractor.mediaPod.originalVideo.audios.extend(resultsSorted)
         apiToSoundExtractor.mediaPod.status = 'sound_extractor_complete'
         
-        rmq_client.send_message(apiToSoundExtractor, "App\\Protobuf\\SoundExtractorApi")
+        rmq_client.send_message(apiToSoundExtractor, "App\\Protobuf\\SoundExtractorToApi")
 
         return True
     except Exception as e:
         apiToSoundExtractor.mediaPod.status = 'sound_extractor_error'
-        if not rmq_client.send_message(apiToSoundExtractor, "App\\Protobuf\\SoundExtractorApi"):
+        if not rmq_client.send_message(apiToSoundExtractor, "App\\Protobuf\\SoundExtractorToApi"):
             return False
 
 def extract_sound(file: str, audioFilePath: str) -> bool:

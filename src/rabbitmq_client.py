@@ -24,11 +24,10 @@ class RabbitMQClient:
                 properties=pika.BasicProperties(
                     delivery_mode=2,
                     content_type="application/json",
-                    headers={"type": "App\\Protobuf\\SoundExtractorApi"}
+                    headers={"type": type}
                 )
             )
 
             return True
         except Exception as e:
-            print('$$$$$$$$$$$$$$$$$$$$$$$$')
             print(e)
