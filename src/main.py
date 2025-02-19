@@ -38,8 +38,6 @@ celery.conf.update({
 def process_message(message):
     protobuf: ApiToSubtitleTransformer = ProtobufConverter.json_to_protobuf(message)
 
-    print(protobuf)
-
     return False
 
     key = f"{protobuf.mediaPod.userUuid}/{protobuf.mediaPod.uuid}/{protobuf.mediaPod.originalVideo.subtitle}"
