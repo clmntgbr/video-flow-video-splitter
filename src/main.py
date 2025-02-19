@@ -37,6 +37,7 @@ celery.conf.update({
 @celery.task(name='tasks.process_message', queue=app.config['RMQ_QUEUE_READ'])
 def process_message(message):
     protobuf: ApiToSubtitleTransformer = ProtobufConverter.json_to_protobuf(message)
+    print(protobuf)
 
     return False
 
