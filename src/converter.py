@@ -5,6 +5,7 @@ class ProtobufConverter:
     @staticmethod
     def json_to_protobuf(message: str) -> ApiToSubtitleTransformer:
         data = json.loads(message)
+        print(data)
         media_pod_data = data["mediaPod"]
 
         video = Video()
@@ -21,7 +22,9 @@ class ProtobufConverter:
         preset.subtitleFont = media_pod_data["preset"]["subtitleFont"]
         preset.subtitleSize = media_pod_data["preset"]["subtitleSize"]
         preset.subtitleColor = media_pod_data["preset"]["subtitleColor"]
-        preset.subtitleBackground = media_pod_data["preset"]["subtitleBackground"]
+        preset.subtitleBold = media_pod_data["preset"]["subtitleBold"]
+        preset.subtitleItalic = media_pod_data["preset"]["subtitleItalic"]
+        preset.subtitleUnderline = media_pod_data["preset"]["subtitleUnderline"]
         preset.subtitleOutlineColor = media_pod_data["preset"]["subtitleOutlineColor"]
         preset.subtitleOutlineThickness = media_pod_data["preset"]["subtitleOutlineThickness"]
         preset.subtitleShadow = media_pod_data["preset"]["subtitleShadow"]
