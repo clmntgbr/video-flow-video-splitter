@@ -29,7 +29,7 @@ message SubtitleMergerToApi {
     MediaPod mediaPod = 1;
 }
 
-message ApiToSubtitleTransformer {
+message ApiToVideoFormatter {
     MediaPod mediaPod = 1;
 }
 
@@ -42,6 +42,14 @@ message ApiToSubtitleIncrustator {
 }
 
 message SubtitleIncrustatorToApi {
+    MediaPod mediaPod = 1;
+}
+
+message ApiToVideoFormatter {
+    MediaPod mediaPod = 1;
+}
+
+message VideoFormatterToApi {
     MediaPod mediaPod = 1;
 }
 
@@ -68,11 +76,15 @@ enum MediaPodStatus {
     SUBTITLE_INCRUSTATOR_COMPLETE = 14;
     SUBTITLE_INCRUSTATOR_ERROR = 15;
 
-    RESIZING = 16;
-    RESIZED = 17;
+    SUBTITLE_FORMATTER_PENDING = 16;
+    SUBTITLE_FORMATTER_COMPLETE = 17;
+    SUBTITLE_FORMATTER_ERROR = 18;
 
-    READY_FOR_EXPORT = 18;
-    ERROR = 19;
+    RESIZING = 19;
+    RESIZED = 20;
+
+    READY_FOR_EXPORT = 21;
+    ERROR = 22;
 }
 
 enum PresetSubtitleShadow {
@@ -102,6 +114,7 @@ message MediaPod {
     Video video = 4;
     string status = 5;
     Preset preset = 6;
+    Video processedVideo = 7;
 }
 
 message Video {

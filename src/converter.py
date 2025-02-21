@@ -1,20 +1,20 @@
 import json
-from src.Protobuf.Message_pb2 import ApiToSubtitleTransformer, MediaPod, Video, Preset
+from src.Protobuf.Message_pb2 import ApiToVideoFormatter, MediaPod, Video, Preset
 
 class ProtobufConverter:
     @staticmethod
-    def json_to_protobuf(message: str) -> ApiToSubtitleTransformer:
+    def json_to_protobuf(message: str) -> ApiToVideoFormatter:
         data = json.loads(message)
         print(data)
         media_pod_data = data["mediaPod"]
 
         video = Video()
-        video.name = media_pod_data["originalVideo"]["name"]
-        video.mimeType = media_pod_data["originalVideo"]["mimeType"]
-        video.size = int(media_pod_data["originalVideo"]["size"])
-        video.subtitle = media_pod_data["originalVideo"]["subtitle"]
-        video.audios.extend(media_pod_data["originalVideo"]["audios"])
-        video.subtitles.extend(media_pod_data["originalVideo"]["subtitles"])
+        video.name = media_pod_data["processedVideo"]["name"]
+        video.mimeType = media_pod_data["processedVideo"]["mimeType"]
+        video.size = int(media_pod_data["processedVideo"]["size"])
+        video.subtitle = media_pod_data["processedVideo"]["subtitle"]
+        video.audios.extend(media_pod_data["processedVideo"]["audios"])
+        video.subtitles.extend(media_pod_data["processedVideo"]["subtitles"])
 
         video.IsInitialized()
 
@@ -36,12 +36,12 @@ class ProtobufConverter:
         media_pod.uuid = media_pod_data["uuid"]
         media_pod.userUuid = media_pod_data["userUuid"]
         media_pod.status = media_pod_data["status"]
-        media_pod.originalVideo.CopyFrom(video)
+        media_pod.processedVideo.CopyFrom(video)
         media_pod.preset.CopyFrom(preset)
 
         media_pod.IsInitialized()
 
-        proto_message = ApiToSubtitleTransformer()
+        proto_message = ApiToVideoFormatter()
         proto_message.mediaPod.CopyFrom(media_pod)
 
         proto_message.IsInitialized()
