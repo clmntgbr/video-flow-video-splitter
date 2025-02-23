@@ -36,7 +36,6 @@ class ProtobufConverter:
         media_pod.uuid = media_pod_data["uuid"]
         media_pod.userUuid = media_pod_data["userUuid"]
         media_pod.status = media_pod_data["status"]
-        media_pod.processedVideo.CopyFrom(video)
         media_pod.preset.CopyFrom(preset)
 
         media_pod.IsInitialized()
