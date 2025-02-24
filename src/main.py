@@ -9,7 +9,7 @@ from src.s3_client import S3Client
 from src.rabbitmq_client import RabbitMQClient
 from src.file_client import FileClient
 from src.converter import ProtobufConverter
-from src.Protobuf.Message_pb2 import ApiToVideoFormatter, MediaPod
+from src.Protobuf.Message_pb2 import ApiToVideoFormatter, MediaPod, VideoFormatStyle, MediaPodStatus
 
 app = Flask(__name__)
 app.config.from_object(Config)
@@ -41,5 +41,30 @@ def process_message(message):
     protobuf.mediaPod.CopyFrom(mediaPod)
     protobuf.IsInitialized()
 
-    print(protobuf)
+    uuid = os.path.splitext(protobuf.mediaPod.originalVideo.name)[0]
+    type = os.path.splitext(protobuf.mediaPod.originalVideo.name)[1]
+
+    key = f"{protobuf.mediaPod.userUuid}/{protobuf.mediaPod.uuid}/{protobuf.mediaPod.originalVideo.name}"
+    tmpVideoPath = f"/tmp/{uuid}{type}"
+    keyProcessed = f"{protobuf.mediaPod.userUuid}/{protobuf.mediaPod.uuid}/{uuid}_processed{type}"
+
+    protobuf.mediaPod.processedVideo.CopyFrom(protobuf.mediaPod.originalVideo)
+    protobuf.mediaPod.processedVideo.name = f"{uuid}_processed{type}"
+
+    if not s3_client.download_file(key, tmpVideoPath):
+            return False
+
+    if (protobuf.mediaPod.format ==  VideoFormatStyle.Name(VideoFormatStyle.ORIGINAL)):
+        if not s3_client.upload_file(tmpVideoPath, keyProcessed):
+            return False
+
+    if (protobuf.mediaPod.format ==  VideoFormatStyle.Name(VideoFormatStyle.ZOOMED_916)):
+         print('ici')
+
+    file_client.delete_file(tmpVideoPath)
+
+    protobuf.mediaPod.status = MediaPodStatus.Name(MediaPodStatus.VIDEO_FORMATTER_COMPLETE)
+    rmq_client.send_message(protobuf, "App\\Protobuf\\VideoFormatterToApi")
+
+    return True
     

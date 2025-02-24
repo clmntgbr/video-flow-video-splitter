@@ -110,6 +110,8 @@ enum PresetSubtitleFont {
 enum VideoFormatStyle {
     ORIGINAL = 0;
     ZOOMED_916 = 1;
+    NORMAL_WITH_BORDERS_916 = 2;
+    DUPLICATED_BLURRED_916 = 3;
 }
 
 message MediaPod {
