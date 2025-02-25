@@ -1,5 +1,6 @@
 import os
 import re
+import ffmpeg
 from kombu import Queue
 from flask import Flask
 from celery import Celery
@@ -41,11 +42,14 @@ def process_message(message):
     protobuf.mediaPod.CopyFrom(mediaPod)
     protobuf.IsInitialized()
 
+    print(protobuf)
+
     uuid = os.path.splitext(protobuf.mediaPod.originalVideo.name)[0]
     type = os.path.splitext(protobuf.mediaPod.originalVideo.name)[1]
 
     key = f"{protobuf.mediaPod.userUuid}/{protobuf.mediaPod.uuid}/{protobuf.mediaPod.originalVideo.name}"
     tmpVideoPath = f"/tmp/{uuid}{type}"
+    tmpProcessedVideoPath = f"/tmp/{uuid}_processed{type}"
     keyProcessed = f"{protobuf.mediaPod.userUuid}/{protobuf.mediaPod.uuid}/{uuid}_processed{type}"
 
     protobuf.mediaPod.processedVideo.CopyFrom(protobuf.mediaPod.originalVideo)
@@ -59,7 +63,11 @@ def process_message(message):
             return False
 
     if (protobuf.mediaPod.format ==  VideoFormatStyle.Name(VideoFormatStyle.ZOOMED_916)):
-         print('ici')
+        if not convert_to_zoomed_916(tmpVideoPath, tmpProcessedVideoPath):
+            return False
+        if not s3_client.upload_file(tmpProcessedVideoPath, keyProcessed):
+            return False
+        file_client.delete_file(tmpProcessedVideoPath)
 
     file_client.delete_file(tmpVideoPath)
 
@@ -67,4 +75,25 @@ def process_message(message):
     rmq_client.send_message(protobuf, "App\\Protobuf\\VideoFormatterToApi")
 
     return True
+
+def convert_to_zoomed_916(input_video, output_video):
+    probe = ffmpeg.probe(input_video)
+    video_stream = next((stream for stream in probe['streams'] if stream['codec_type'] == 'video'), None)
     
+    if not video_stream:
+        raise ValueError('video_stream error on parameters.')
+    
+    width = int(video_stream['width'])
+    height = int(video_stream['height'])
+    new_width = int((9 / 16) * height)
+    crop_x = max(0, (width - new_width) // 2)
+
+    ffmpeg.input(input_video).filter('crop', new_width, height, crop_x, 0
+    ).output(
+        output_video, 
+        vcodec="libx264", crf=23, preset="fast",
+        acodec="aac", audio_bitrate="128k",
+        map="0:a"
+    ).run()
+
+    return True
