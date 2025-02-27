@@ -42,8 +42,6 @@ def process_message(message):
     protobuf.mediaPod.CopyFrom(mediaPod)
     protobuf.IsInitialized()
 
-    print(protobuf)
-
     uuid = os.path.splitext(protobuf.mediaPod.originalVideo.name)[0]
     type = os.path.splitext(protobuf.mediaPod.originalVideo.name)[1]
 
@@ -58,11 +56,11 @@ def process_message(message):
     if not s3_client.download_file(key, tmpVideoPath):
             return False
 
-    if (protobuf.mediaPod.format ==  VideoFormatStyle.Name(VideoFormatStyle.ORIGINAL)):
+    if (protobuf.mediaPod.configuration.format ==  VideoFormatStyle.Name(VideoFormatStyle.ORIGINAL)):
         if not s3_client.upload_file(tmpVideoPath, keyProcessed):
             return False
 
-    if (protobuf.mediaPod.format ==  VideoFormatStyle.Name(VideoFormatStyle.ZOOMED_916)):
+    if (protobuf.mediaPod.configuration.format ==  VideoFormatStyle.Name(VideoFormatStyle.ZOOMED_916)):
         if not convert_to_zoomed_916(tmpVideoPath, tmpProcessedVideoPath):
             return False
         if not s3_client.upload_file(tmpProcessedVideoPath, keyProcessed):
