@@ -1,21 +1,21 @@
 services:
-    video-formatter:
-        container_name: ${PROJECT_NAME}-video-formatter
+    video-splitter:
+        container_name: ${PROJECT_NAME}-video-splitter
         env_file:
             - .env.local
         build:
             dockerfile: ./Dockerfile
             args:
                 SERVICE_PORT: 5000
-                SERVICE_NAME: video-formatter
+                SERVICE_NAME: video-splitter
         restart: unless-stopped
         networks:
             - api_network
         volumes:
             - ./:/app
-        command: celery -A src.main.celery worker --loglevel=info --queues=api_to_video_formatter
+        command: celery -A src.main.celery worker --loglevel=info --queues=api_to_video_splitter
         ports:
-            - "5004:5000"
+            - "5006:5000"
 
 networks:
   api_network:
