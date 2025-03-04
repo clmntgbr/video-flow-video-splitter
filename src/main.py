@@ -11,12 +11,7 @@ from src.s3_client import S3Client
 from src.rabbitmq_client import RabbitMQClient
 from src.file_client import FileClient
 from src.converter import ProtobufConverter
-from src.Protobuf.Message_pb2 import (
-    ApiToVideoSplitter,
-    MediaPod,
-    Video,
-    MediaPodStatus
-)
+from src.Protobuf.Message_pb2 import ApiToVideoSplitter, MediaPod, Video, MediaPodStatus
 
 app = Flask(__name__)
 app.config.from_object(Config)
@@ -55,33 +50,42 @@ def process_message(message):
 
     keyProcessedVideo = f"{protobuf.mediaPod.userUuid}/{protobuf.mediaPod.uuid}/{protobuf.mediaPod.processedVideo.name}"
     tmpProcessedVideoPath = f"/tmp/{id}_processed{type}"
-    
+
     if not s3_client.download_file(keyProcessedVideo, tmpProcessedVideoPath):
         return False
-    
+
     probe = ffmpeg.probe(tmpProcessedVideoPath)
-    duration = float(probe['format']['duration'])
+    duration = float(probe["format"]["duration"])
     segment_duration = duration / int(protobuf.mediaPod.configuration.split)
 
-    split_video(tmpProcessedVideoPath, id, type, int(protobuf.mediaPod.configuration.split), segment_duration)
-    
+    split_video(
+        tmpProcessedVideoPath,
+        id,
+        type,
+        int(protobuf.mediaPod.configuration.split),
+        segment_duration,
+    )
+
     x = int(protobuf.mediaPod.configuration.split)
     for value in range(1, x + 1):
-        size_in_bytes = os.path.getsize(f'/tmp/{id}_final_part_{value}{type}')
+        size_in_bytes = os.path.getsize(f"/tmp/{id}_final_part_{value}{type}")
         video = Video(
             uuid=str(uuid.uuid4()),
-            name=f'{id}_final_part_{value}{type}',
+            name=f"{id}_final_part_{value}{type}",
             mimeType=protobuf.mediaPod.processedVideo.mimeType,
             size=size_in_bytes,
             length=int(segment_duration),
         )
 
-        if not s3_client.upload_file(f'/tmp/{id}_final_part_{value}{type}', f"{protobuf.mediaPod.userUuid}/{protobuf.mediaPod.uuid}/{id}_final_part_{value}{type}"):
+        if not s3_client.upload_file(
+            f"/tmp/{id}_final_part_{value}{type}",
+            f"{protobuf.mediaPod.userUuid}/{protobuf.mediaPod.uuid}/{id}_final_part_{value}{type}",
+        ):
             return False
-        
-        file_client.delete_file(f'/tmp/{id}_final_part_{value}{type}')
+
+        file_client.delete_file(f"/tmp/{id}_final_part_{value}{type}")
         protobuf.mediaPod.finalVideo.append(video)
-    
+
     file_client.delete_file(tmpProcessedVideoPath)
 
     protobuf.mediaPod.status = MediaPodStatus.Name(
@@ -91,8 +95,11 @@ def process_message(message):
 
     return True
 
+
 def split_video(input_file, id, type, parts, segment_duration):
     for i in range(parts):
         start_time = i * segment_duration
-        output_file = os.path.join('/tmp', f'{id}_final_part_{i+1}{type}')
-        ffmpeg.input(input_file, ss=start_time, t=segment_duration).output(output_file, c='copy').run(overwrite_output=True)
+        output_file = os.path.join("/tmp", f"{id}_final_part_{i+1}{type}")
+        ffmpeg.input(input_file, ss=start_time, t=segment_duration).output(
+            output_file, c="copy"
+        ).run(overwrite_output=True)
